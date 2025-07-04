@@ -1,3 +1,4 @@
 python-dotenv
 ebird-api
 fastmcp
+google-generativeai

@@ -223,4 +223,4 @@ def get_ebird_totals(region_code: str) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="http", port=8000)
