@@ -8,6 +8,10 @@ from ebird.api import (
     get_top_100, get_totals
 )
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Get eBird API key from environment variable
 api_key = os.environ.get("EBIRD_API_KEY")
 
