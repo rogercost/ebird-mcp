@@ -1,4 +1,5 @@
 import os
+import json
 from fastmcp import FastMCP
 from ebird.api import (
     get_observations, get_hotspots, get_nearby_hotspots, get_hotspot,
@@ -7,19 +8,71 @@ from ebird.api import (
     get_regions, get_adjacent_regions, get_region, get_taxonomy,
     get_top_100, get_totals
 )
-
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Get eBird API key from environment variable
 api_key = os.environ.get("EBIRD_API_KEY")
-
 if not api_key:
     raise ValueError("EBIRD_API_KEY environment variable not set.")
 
 # Create a server instance with a descriptive name
 mcp = FastMCP(name="eBird-API-MCP")
+
+# In-memory data structure for taxonomy
+taxonomy_map = None
+
+def initialize_taxonomy():
+    global taxonomy_map
+    if taxonomy_map:
+        return
+
+    taxonomy_dir = ".taxonomy"
+    taxonomy_file = os.path.join(taxonomy_dir, "taxonomy.json")
+
+    if not os.path.exists(taxonomy_dir):
+        os.makedirs(taxonomy_dir)
+
+    if not os.path.exists(taxonomy_file):
+        print("Fetching eBird taxonomy...")
+        taxonomy_data = get_taxonomy(api_key)
+        with open(taxonomy_file, "w") as f:
+            json.dump(taxonomy_data, f)
+    else:
+        with open(taxonomy_file, "r") as f:
+            taxonomy_data = json.load(f)
+
+    print("Building common name - species code 2-way map...")
+    taxonomy_map = {}
+    for species in taxonomy_data:
+        species_code = species.get("speciesCode")
+        common_name = species.get("comName")
+        if species_code and common_name:
+            taxonomy_map[species_code] = common_name
+            taxonomy_map[common_name.lower()] = species_code
+
+@mcp.tool
+def get_species_code(common_name: str) -> str:
+    """
+    Get the species code for a given common name.
+
+    :param common_name: The common name of the species.
+    :return: The species code.
+    """
+    initialize_taxonomy()
+    return taxonomy_map.get(common_name.lower(), "Species not found")
+
+@mcp.tool
+def get_common_name(species_code: str) -> str:
+    """
+    Get the common name for a given species code.
+
+    :param species_code: The species code.
+    :return: The common name of the species.
+    """
+    initialize_taxonomy()
+    return taxonomy_map.get(species_code, "Species not found")
 
 @mcp.tool
 def get_ebird_observations(region_code: str, back: int = 7, detail: str = 'full') -> list:
@@ -189,18 +242,6 @@ def get_ebird_region_info(region_code: str) -> dict:
     :return: A dictionary containing region information.
     """
     return get_region(api_key, region_code)
-
-
-@mcp.tool
-def get_ebird_taxonomy(locale: str = 'en') -> list:
-    """
-    Get the eBird taxonomy.
-
-    :param locale: The locale for the common names (e.g., 'es', 'fr').
-    :return: A list of species in the taxonomy.
-    """
-    return get_taxonomy(api_key, locale=locale)
-
 
 @mcp.tool
 def get_ebird_top_100(region_code: str, ymd: str) -> list:
